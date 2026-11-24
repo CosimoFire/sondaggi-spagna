@@ -11,6 +11,8 @@
 <style>
   .sw--diamond { width: 8px; height: 8px; border-radius: 0; transform: rotate(45deg); background: var(--ink); margin: 0 2px; }
   .sw--dot { width: 6px; height: 6px; border-radius: 50%; background: var(--grey); opacity: .5; }
+  :root { --vox: #5cb85c; }
+  :root[data-theme="dark"] { --vox: #8fd88a; }
   .r-method { font-size: 12px; line-height: 1.45; color: var(--ink-2); margin: 10px 0 0; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -52,7 +54,7 @@
   var PARTIES = [
     { k: "PP",    name: "PP",                short: "PP",       color: "var(--blue)",   w: 2.25, dots: true, it: "Partito popolare" },
     { k: "PSOE",  name: "PSOE",              short: "PSOE",     color: "var(--red)",    w: 2.25, dots: true, it: "Partito socialista" },
-    { k: "Vox",   name: "Vox",               short: "Vox",      color: "var(--grey-1)", w: 2.25, dots: true },
+    { k: "Vox",   name: "Vox",               short: "Vox",      color: "var(--vox)",    w: 2.25, dots: true },
     { k: "SIN",   name: "Sinistra del PSOE", short: "Sinistra", color: "var(--grey-3)", w: 2,    dots: true },
     { k: "ERC",   name: "ERC",               short: "ERC",      color: "var(--grey-4)", w: 1.5 },
     { k: "SALF",  name: "SALF",              short: "SALF",     color: "var(--grey-4)", w: 1.5 },

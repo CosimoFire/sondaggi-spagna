@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spagna, come cambiano i partiti nei sondaggi – Radar QN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,700&display=swap">
+<link rel="stylesheet" href="../assets/radar.css">
+<style>
+  .sw--diamond { width: 8px; height: 8px; border-radius: 0; transform: rotate(45deg); background: var(--ink); margin: 0 2px; }
+  .sw--dot { width: 6px; height: 6px; border-radius: 50%; background: var(--grey); opacity: .5; }
+  .r-method { font-size: 12px; line-height: 1.45; color: var(--ink-2); margin: 10px 0 0; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="../assets/radar.js"></script>
+</head>
+<body>
+<main class="radar">
+  <header>
+    <h1 class="r-title">Spagna, come cambiano i partiti nei sondaggi</h1>
+    <p class="r-sub">Media dei sondaggi sulle intenzioni di voto alle elezioni generali, in %. Dalle elezioni del 23 luglio 2023 a oggi</p>
+  </header>
+
+
+  <figure class="r-chart" id="chart" style="margin-top:24px"></figure>
+  <div class="r-key">
+    <span><i class="sw sw--diamond"></i>Risultato delle elezioni 2023</span>
+    <span><i class="sw sw--dot"></i>Singoli sondaggi</span>
+  </div>
+  <p class="r-method" id="method"></p>
+
+  <footer class="r-foot">
+    <span>Fonte: sondaggi pubblicati, raccolti da Wikipedia</span>
+    <span>Elaborazione Radar – QN</span>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var R = Radar, fmt = R.fmt;
+  var dayLong = R.timeLocale.format("%e %B %Y");
+  var monthLong = R.timeLocale.format("%B %Y");
+  function cap(s) { s = s.trim(); return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  // partiti: un solo colore che parla (Vox, in rosso); PP e PSOE in blu, il resto in grigio
+  var PARTIES = [
+    { k: "PP",    name: "PP",                short: "PP",       color: "var(--blue-1)", w: 2.25, dots: true },
+    { k: "PSOE",  name: "PSOE",              short: "PSOE",     color: "var(--blue-3)", w: 2.25, dots: true },
+    { k: "Vox",   name: "Vox",               short: "Vox",      color: "var(--red)",    w: 2.5,  dots: true },
+    { k: "SIN",   name: "Sinistra del PSOE", short: "Sinistra", color: "var(--grey-2)", w: 2,    dots: true },
+    { k: "ERC",   name: "ERC",               short: "ERC",      color: "var(--grey-4)", w: 1.5 },
+    { k: "SALF",  name: "SALF",              short: "SALF",     color: "var(--grey-4)", w: 1.5 },
+    { k: "Junts", name: "Junts",             short: "Junts",    color: "var(--grey-4)", w: 1.5 }
+  ];
+  var parse = d3.timeParse("%Y-%m-%d");
+
+  Promise.all([R.loadCSV("../data/media.csv"), R.loadCSV("../data/sondaggi.csv")]).then(function (res) {
+    var days = res[0].map(function (r) {
+      var o = { date: parse(r["Data"]) };
+      PARTIES.forEach(function (p) { o[p.k] = R.num(r[p.k]); o[p.k + "e"] = R.num(r[p.k + " ±"]); });
+      return o;
+    });
+    var polls = res[1].map(function (r) {
+      var o = { date: parse(r["Data"]), firm: r["Istituto"], election: r["Elezioni"] === "sì" };
+      PARTIES.forEach(function (p) { o[p.k] = R.num(r[p.k]); });
+      return o;
+    });
+    var election = polls.filter(function (p) { return p.election; })[0];
+    var surveys = polls.filter(function (p) { return !p.election; });
+    var first = days[0], last = days[days.length - 1];
+
+    PARTIES.forEach(function (p) {
+      p.series = days.filter(function (d) { return d[p.k] != null; });
+      p.last = p.series[p.series.length - 1];
+    });
+    var byK = {}; PARTIES.forEach(function (p) { byK[p.k] = p; });
+
+    var voxNow = byK.Vox.last.Vox;
+
+    d3.select("#method").text("La media combina " + R.locale.format(",")(surveys.length) + " sondaggi nazionali con un filtro di Kalman: " +
+      "ogni sondaggio pesa in base al campione, con un limite per l'errore di metodo, e viene corretto per la tendenza sistematica " +
+      "del suo istituto. «Sinistra del PSOE» somma Sumar, Podemos e, da ottobre 2026, le nuove liste. Esclusi i sondaggi commissionati dai partiti.");
+
+    // annotazioni calcolate dai dati
+    var ppPeak = d3.greatest(byK.PP.series, function (d) { return d.PP; });
+    var psoeLow = d3.least(byK.PSOE.series, function (d) { return d.PSOE; });
+
+    var host = document.getElementById("chart");
+    var tip = R.tooltip(host);
+    var clearActive = function () {};
+    R.dismissOutside(host, function () { tip.hide(); clearActive(); });
+
+    R.responsive(host, function (W, phase) {
+      var narrow = R.isNarrow(W);
+      var m = { top: 14, right: narrow ? 88 : 142, bottom: 30, left: 28 };
+      var H = narrow ? 380 : 460;
+      var w = W - m.left - m.right, h = H - m.top - m.bottom;
+
+      var x = d3.scaleTime().domain([first.date, last.date]).range([0, w]);
+      var yMax = 40;
+      var y = d3.scaleLinear().domain([0, yMax]).range([h, 0]);
+      var yTicks = d3.range(0, yMax + 0.1, narrow ? 10 : 5);
+
+      d3.select(host).select("svg").remove();
+      var svg = d3.select(host).insert("svg", ".r-tip").attr("width", W).attr("height", H).attr("role", "img")
+        .attr("aria-label", "Grafico a linee: dalle elezioni del luglio 2023 il PP passa dal " + fmt(election.PP, 1) + " al " +
+          fmt(byK.PP.last.PP, 1) + "%, il PSOE dal " + fmt(election.PSOE, 1) + " al " + fmt(byK.PSOE.last.PSOE, 1) +
+          "%, Vox dal " + fmt(election.Vox, 1) + " al " + fmt(voxNow, 1) + "%.");
+      svg.append("title").text("Spagna, media dei sondaggi dalle elezioni del 2023");
+      var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
+
+      // griglia
+      g.append("g").attr("class", "grid").selectAll("line").data(yTicks).join("line")
+        .attr("x1", 0).attr("x2", w)
+        .attr("y1", function (d) { return Math.round(y(d)) + 0.5; }).attr("y2", function (d) { return Math.round(y(d)) + 0.5; })
+        .attr("class", function (d) { return d === 0 ? "baseline" : null; });
+      g.append("g").selectAll("text").data(yTicks).join("text").attr("class", "tick-label")
+        .attr("x", -8).attr("y", function (d) { return y(d); }).attr("dy", "0.35em").attr("text-anchor", "end")
+        .text(function (d) { return fmt(d, 0); });
+
+      // asse X: anni
+      var years = x.ticks(d3.timeYear.every(1)).filter(function (d) { return x(d) > 14 && x(d) < w - 14; });
+      var xa = g.append("g").attr("transform", "translate(0," + h + ")");
+      xa.selectAll("line").data(years).join("line")
+        .attr("x1", function (d) { return Math.round(x(d)) + 0.5; }).attr("x2", function (d) { return Math.round(x(d)) + 0.5; })
+        .attr("y1", 0).attr("y2", 5).style("stroke", "var(--ink)");
+      xa.selectAll("text").data(years).join("text").attr("class", "tick-label")
+        .attr("x", function (d) { return x(d); }).attr("y", 20).attr("text-anchor", "middle")
+        .text(function (d) { return narrow ? "’" + d3.timeFormat("%y")(d) : d3.timeFormat("%Y")(d); });
+
+      // singoli sondaggi (solo i partiti principali, molto tenui)
+      var gDots = g.append("g");
+      PARTIES.filter(function (p) { return p.dots; }).forEach(function (p) {
+        gDots.append("g").attr("class", "mark dots-" + p.k).selectAll("circle")
+          .data(surveys.filter(function (s) { return s[p.k] != null; })).join("circle")
+          .attr("cx", function (s) { return x(s.date); }).attr("cy", function (s) { return y(s[p.k]); })
+          .attr("r", narrow ? 1.3 : 1.6).style("fill", p.color).style("opacity", 0.22);
+      });
+      R.enter(gDots, phase, function (s) { s.style("opacity", 0); }, function (s) { s.style("opacity", 1); }, R.DUR * 0.6);
+
+      // linee (dalla più tenue alla più importante)
+      var lines = {};
+      PARTIES.slice().reverse().forEach(function (p) {
+        var line = d3.line().curve(d3.curveMonotoneX).x(function (d) { return x(d.date); }).y(function (d) { return y(d[p.k]); });
+        var path = g.append("path").datum(p.series).attr("class", "mark")
+          .style("fill", "none").style("stroke", p.color).attr("stroke-width", p.w)
+          .attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("d", line);
+        var L = path.node().getTotalLength();
+        R.enter(path, phase,
+          function (s) { s.attr("stroke-dasharray", L + " " + L).attr("stroke-dashoffset", L); },
+          function (s) { s.attr("stroke-dashoffset", 0); });
+        lines[p.k] = path;
+      });
+
+      // risultato elettorale: rombi al primo giorno
+      var gEl = g.append("g");
+      PARTIES.forEach(function (p) {
+        if (election[p.k] == null) return;
+        var cx = x(election.date), cy = y(election[p.k]);
+        gEl.append("rect").attr("x", cx - 4).attr("y", cy - 4).attr("width", 8).attr("height", 8)
+          .attr("transform", "rotate(45 " + cx + " " + cy + ")")
+          .style("fill", p.color).style("stroke", "var(--bg)").attr("stroke-width", 1.5);
+      });
+
+      // etichette dirette a destra, distanziate
+      var labs = PARTIES.map(function (p) { return { p: p, y0: y(p.last[p.k]), y: y(p.last[p.k]) }; })
+        .sort(function (a, b) { return a.y0 - b.y0; });
+      var gap = 15;
+      for (var it = 0; it < 80; it++) {
+        for (var j = 1; j < labs.length; j++) {
+          var dd = labs[j].y - labs[j - 1].y;
+          if (dd < gap) { var s = (gap - dd) / 2; labs[j].y += s; labs[j - 1].y -= s; }
+        }
+        var over = labs[labs.length - 1].y - (h + 2);
+        if (over > 0) labs.forEach(function (l) { l.y -= over / labs.length; });
+      }
+      var gLab = g.append("g");
+      labs.forEach(function (l) {
+        var lx = x(l.p.last.date) + 8;
+        gLab.append("text").attr("class", "series-label").attr("x", lx).attr("y", l.y).attr("dy", "0.35em")
+          .style("font-weight", l.p.dots ? 600 : 400)
+          .style("fill", l.p.k === "Vox" ? "var(--red)" : "var(--ink)")
+          .text((narrow ? l.p.short : l.p.name) + " " + fmt(l.p.last[l.p.k], 1));
+      });
+      R.enter(gLab, phase, function (s) { s.style("opacity", 0); }, function (s) { s.style("opacity", 1); }, R.DUR * 0.85);
+
+      // annotazioni (max due): picco del PP e minimo del PSOE
+      var an = g.append("g").attr("class", "anno");
+      function anno(d, v, dy, txt, width, left) {
+        var cx = x(d.date), cy = y(v), ty = cy + dy;
+        an.append("line").attr("x1", cx).attr("x2", cx).attr("y1", cy).attr("y2", ty + (dy < 0 ? 4 : -12));
+        an.append("circle").attr("cx", cx).attr("cy", cy).attr("r", 2.5);
+        an.append("text").attr("x", left ? cx - 4 : cx + 4).attr("y", ty).attr("text-anchor", left ? "end" : "start")
+          .text(txt).call(R.wrap, width);
+      }
+      anno(ppPeak, ppPeak.PP, y(39.6) - y(ppPeak.PP), cap(monthLong(ppPeak.date)) + ": PP al " + fmt(ppPeak.PP, 1) + "%, il massimo", narrow ? 150 : 300);
+      anno(psoeLow, psoeLow.PSOE, 46, cap(monthLong(psoeLow.date)) + ": PSOE al minimo, " + fmt(psoeLow.PSOE, 1) + "%", narrow ? 105 : 160, narrow);
+      R.enter(an, phase, function (s) { s.style("opacity", 0); }, function (s) { s.style("opacity", 1); }, R.DUR * 0.5);
+
+      // crosshair + tooltip
+      var cross = g.append("line").attr("class", "crosshair").attr("y1", 0).attr("y2", h).style("opacity", 0);
+      var dots = g.append("g");
+      function activate(d) {
+        var cx = x(d.date);
+        cross.attr("x1", cx).attr("x2", cx).style("opacity", 1);
+        var rows = PARTIES.filter(function (p) { return d[p.k] != null; })
+          .sort(function (a, b) { return d[b.k] - d[a.k]; });
+        dots.selectAll("circle").data(rows).join("circle")
+          .attr("cx", cx).attr("cy", function (p) { return y(d[p.k]); }).attr("r", 4)
+          .style("fill", function (p) { return p.color; }).style("stroke", "var(--bg)").attr("stroke-width", 1.5);
+        var nPolls = surveys.filter(function (s) { return Math.abs(s.date - d.date) < 4 * 864e5; }).length;
+        tip.show(R.tipHTML({
+          title: cap(dayLong(d.date)),
+          rows: rows.map(function (p) { return [p.name, fmt(d[p.k], 1) + "% <span style='font-weight:400;color:var(--ink-2)'>±" + fmt(d[p.k + "e"], 1) + "</span>"]; }),
+          note: d === first ? "Risultato delle elezioni" : (nPolls ? nPolls + (nPolls === 1 ? " sondaggio" : " sondaggi") + " in una settimana attorno a questa data" : "Nessun sondaggio in questa settimana") + ". ± = margine al 95%"
+        }), cx + m.left, y(d[rows[0].k]) + m.top);
+      }
+      clearActive = function () { cross.style("opacity", 0); dots.selectAll("circle").remove(); };
+      var bis = d3.bisector(function (d) { return d.date; }).center;
+      g.append("rect").attr("class", "hit").attr("x", 0).attr("y", -m.top).attr("width", w).attr("height", h + m.top)
+        .on("pointermove pointerdown", function (ev) { activate(days[bis(days, x.invert(d3.pointer(ev, g.node())[0]))]); })
+        .on("pointerleave", function (ev) { if (ev.pointerType === "mouse") { tip.hide(); clearActive(); } });
+    });
+  }).catch(function (e) { R.fail("#chart", e); });
+})();
+</script>
+</body>
+</html>

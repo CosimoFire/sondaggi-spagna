@@ -29,6 +29,10 @@
     <span><i class="sw sw--diamond"></i>Risultato delle elezioni 2023</span>
     <span><i class="sw sw--dot"></i>Singoli sondaggi</span>
   </div>
+  <div class="r-key" style="margin-top:6px">
+    <span><b>PP</b>&nbsp;Partido Popular, Partito popolare</span>
+    <span><b>PSOE</b>&nbsp;Partido Socialista Obrero Español, Partito socialista operaio spagnolo</span>
+  </div>
   <p class="r-method" id="method"></p>
 
   <footer class="r-foot">
@@ -46,10 +50,10 @@
 
   // partiti: un solo colore che parla (Vox, in rosso); PP e PSOE in blu, il resto in grigio
   var PARTIES = [
-    { k: "PP",    name: "PP",                short: "PP",       color: "var(--blue-1)", w: 2.25, dots: true },
-    { k: "PSOE",  name: "PSOE",              short: "PSOE",     color: "var(--blue-3)", w: 2.25, dots: true },
-    { k: "Vox",   name: "Vox",               short: "Vox",      color: "var(--red)",    w: 2.5,  dots: true },
-    { k: "SIN",   name: "Sinistra del PSOE", short: "Sinistra", color: "var(--grey-2)", w: 2,    dots: true },
+    { k: "PP",    name: "PP",                short: "PP",       color: "var(--blue)",   w: 2.25, dots: true, it: "Partito popolare" },
+    { k: "PSOE",  name: "PSOE",              short: "PSOE",     color: "var(--red)",    w: 2.25, dots: true, it: "Partito socialista" },
+    { k: "Vox",   name: "Vox",               short: "Vox",      color: "var(--grey-1)", w: 2.25, dots: true },
+    { k: "SIN",   name: "Sinistra del PSOE", short: "Sinistra", color: "var(--grey-3)", w: 2,    dots: true },
     { k: "ERC",   name: "ERC",               short: "ERC",      color: "var(--grey-4)", w: 1.5 },
     { k: "SALF",  name: "SALF",              short: "SALF",     color: "var(--grey-4)", w: 1.5 },
     { k: "Junts", name: "Junts",             short: "Junts",    color: "var(--grey-4)", w: 1.5 }
@@ -181,7 +185,7 @@
         var lx = x(l.p.last.date) + 8;
         gLab.append("text").attr("class", "series-label").attr("x", lx).attr("y", l.y).attr("dy", "0.35em")
           .style("font-weight", l.p.dots ? 600 : 400)
-          .style("fill", l.p.k === "Vox" ? "var(--red)" : "var(--ink)")
+          .style("fill", "var(--ink)")
           .text((narrow ? l.p.short : l.p.name) + " " + fmt(l.p.last[l.p.k], 1));
       });
       R.enter(gLab, phase, function (s) { s.style("opacity", 0); }, function (s) { s.style("opacity", 1); }, R.DUR * 0.85);
@@ -213,7 +217,7 @@
         var nPolls = surveys.filter(function (s) { return Math.abs(s.date - d.date) < 4 * 864e5; }).length;
         tip.show(R.tipHTML({
           title: cap(dayLong(d.date)),
-          rows: rows.map(function (p) { return [p.name, fmt(d[p.k], 1) + "% <span style='font-weight:400;color:var(--ink-2)'>±" + fmt(d[p.k + "e"], 1) + "</span>"]; }),
+          rows: rows.map(function (p) { return [p.name + (p.it ? " <span style='font-weight:400'>(" + p.it + ")</span>" : ""), fmt(d[p.k], 1) + "% <span style='font-weight:400;color:var(--ink-2)'>±" + fmt(d[p.k + "e"], 1) + "</span>"]; }),
           note: d === first ? "Risultato delle elezioni" : (nPolls ? nPolls + (nPolls === 1 ? " sondaggio" : " sondaggi") + " in una settimana attorno a questa data" : "Nessun sondaggio in questa settimana") + ". ± = margine al 95%"
         }), cx + m.left, y(d[rows[0].k]) + m.top);
       }

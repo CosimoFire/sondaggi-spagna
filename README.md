@@ -2,7 +2,7 @@
 
 | Dataviz | Cartella |
 |---|---|
-| Spagna, come cambiano i partiti nei sondaggi | `media-sondaggi/` |
+| L’andamento dei partiti nei sondaggi | `media-sondaggi/` |
 
 ## Dati
 - `data/media.csv`: media giornaliera per partito e margine al 95% (±), in %.
